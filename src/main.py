@@ -8,7 +8,7 @@ from collections import Counter
 from src.report_manager import Report
 
 
-spacy.require_gpu()
+spacy.prefer_gpu()
 
 
 def load_pathology_labels(data_path: str | Path) -> list[str]:
