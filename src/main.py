@@ -5,8 +5,8 @@ from tqdm import tqdm
 from collections import Counter
 from rapidfuzz import fuzz
 
-from src.report_manager import Report
-from src.body_sections import BodySection
+from report_manager import Report
+from body_sections import BodySection
 
 
 spacy.prefer_gpu()
@@ -180,6 +180,10 @@ preds_fuzzy_whole_report = fuzzy_match(reports, "report")
 c_fuzzy_whole_report = Counter(preds_fuzzy_whole_report)
 print(f"Number of unlabeled reports with fuzzy matching in the whole report: {c_fuzzy_whole_report['NO PATHOLOGY']}")
 
+
+for report in reports:
+    print(f"{report.text} -> {report.pred_pathology}")
+    break
 
 
 
