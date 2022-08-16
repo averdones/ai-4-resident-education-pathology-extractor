@@ -28,17 +28,20 @@ def load_pathology_labels(data_path: str | Path) -> list[str]:
     return df["labels"].str.lower().tolist()
 
 
-def load_reports(data_path: str | Path, body_section: str | None = None) -> list[Report]:
+def load_reports(data_path: str | Path, body_section: str | None = None) -> tuple[list[Report], list[Report]]:
     """Loads the reports and cleans them.
+
+    Only reports of a specific body section can be returned.
 
     Args:
         data_path: Path to the CSV file with all the reports merged together
         body_section: If given, only the reports of the given body section will be loaded.
 
     Returns:
-        A list with the cleaned reports.
+        A tuple of two lists, one with reports containing impression and one with reports not containing it.
 
     """
+    # TODO: break this function into two: load and clean
     csv_path = Path(data_path).resolve()
     df = pd.read_csv(csv_path)
 
@@ -48,20 +51,28 @@ def load_reports(data_path: str | Path, body_section: str | None = None) -> list
 
     # Ignore cases where the report doesn't seem to contain impressions
     print(f"Total number of reports: {df.shape}")
-    clean_df = df[df["Report"].str.contains("impress", case=False)]
-    print(f"Number of reports after removing reports without 'Impressions': {clean_df.shape}")
-    print(f"Number of reports removed: {df.shape[0] - clean_df.shape[0]}")
+    valid_idx = df["Report"].str.contains("impress", case=False)
+    impress_df = df[valid_idx]
+    non_impress_df = df[~valid_idx]
+    print(f"Number of reports after removing reports without 'Impressions': {impress_df.shape}")
+    print(f"Number of reports removed: {non_impress_df.shape[0]}")
 
-    # Load reports as Report objects
-    reports = []
-    for rep in clean_df["Report"].tolist():
-        reports.append(Report(rep))
+    # TODO: potentially return generators if possible
+    # Load reports with impression as Report objects
+    impress_reports = []
+    for rep in impress_df["Report"].tolist():
+        impress_reports.append(Report(rep))
 
-    return reports
+    # Load reports without impression as Report objects
+    non_impress_reports = []
+    for rep in non_impress_df["Report"].tolist():
+        non_impress_reports.append(Report(rep))
+
+    return impress_reports, non_impress_reports
 
 
 labels = load_pathology_labels("./data/pathology_labels/pathology_labels.csv")
-reports = load_reports("./data/merged_crosswalks_csv/sdr_crosswalks.csv", body_section=BodySection.MSK)
+reports, non_impression_reports = load_reports("./data/merged_crosswalks_csv/sdr_crosswalks.csv", body_section=BodySection.MSK)
 
 
 # Exact match
@@ -87,9 +98,6 @@ def exact_match(reports: list[Report], look_in: str = "impression") -> list[str]
             text = report.text
         else:
             raise ValueError(f"look_in must be 'impression' or 'report'")
-
-        if "there is a minimally displaced fracture of the left medial malleolus" in text:
-            print()
 
         # This variable is needed to check that no pathology was assigned
         found_path = False
@@ -143,6 +151,7 @@ def fuzzy_match(reports: list[Report], look_in: str = "impression", threshold: f
                 preds.append(label)
                 report.pred_pathology = label
                 found_path = True
+                # TODO: don't break if multiple matches are found but get the max instead
                 break
 
         # No pathology was found
