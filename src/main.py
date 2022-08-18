@@ -55,12 +55,13 @@ def exact_match(reports: list[Report], look_in: str = "impression", check_synony
             # TODO: break into different function and have more advance matching
             # Check for synonyms of pathologies
             # WARNING: no synonyms help
-            if label in synonyms_dict:
-                for synonym in synonyms_dict[label]:
-                    if synonym in text:
-                        report.pred_pathology = label
-                        found_path = True
-                        break
+            if check_synonyms:
+                if label in synonyms_dict:
+                    for synonym in synonyms_dict[label]:
+                        if synonym in text:
+                            report.pred_pathology = label
+                            found_path = True
+                            break
 
         # No pathology was found
         if not found_path:
