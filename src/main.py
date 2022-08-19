@@ -102,7 +102,9 @@ def fuzzy_match(reports: list[Report], labels: list[str],  look_in: str = "impre
             fuzzy_scores.append(score)
 
         # Only get the highest score that is above the threshold
-        if (max_idx := np.argmax(fuzzy_scores)) > threshold:
+        max_idx = np.argmax(fuzzy_scores)
+        max_score = fuzzy_scores[max_idx]
+        if max_score > threshold:
             report.pred_pathology = labels[max_idx]
             found_path = True
 
