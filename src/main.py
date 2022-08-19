@@ -1,8 +1,8 @@
 import spacy
 from tqdm import tqdm
 from copy import deepcopy
-from collections import Counter
 from rapidfuzz import fuzz
+import numpy as np
 
 from src.report_manager import Report
 from src.const.body_sections import BodySection
@@ -13,14 +13,9 @@ from src.data_preparation.loaders import load_pathology_labels, load_reports, lo
 spacy.prefer_gpu()
 
 
-labels = load_pathology_labels("src/data_preparation/data/pathology_labels/pathology_labels.csv")
-reports, non_impression_reports = load_reports("src/data_preparation/data/merged_crosswalks_csv/sdr_crosswalks.csv",
-                                               body_section=BodySection.MSK)
-synonyms_dict = load_radlex_synonyms("src/data_preparation/data/radlex/radlex.xls")
-
-
 # Exact match
-def exact_match(reports: list[Report], look_in: str = "impression", check_synonyms: bool = False) -> list[Report]:
+def exact_match(reports: list[Report], labels: list[str], look_in: str = "impression",
+                check_synonyms: bool = False) -> list[Report]:
     """Finds the pathology of each report using exact match.
 
     Args:
@@ -71,7 +66,8 @@ def exact_match(reports: list[Report], look_in: str = "impression", check_synony
 
 
 # Fuzzy match
-def fuzzy_match(reports: list[Report], look_in: str = "impression", threshold: float = 80.0) -> list[Report]:
+def fuzzy_match(reports: list[Report], labels: list[str],  look_in: str = "impression",
+                threshold: float = 80.0) -> list[Report]:
     """Finds the pathology of each report using fuzzy match.
 
     This function changes the report object in-place by adding the predicted pathology to the 'pred_pathology' field.
@@ -88,7 +84,6 @@ def fuzzy_match(reports: list[Report], look_in: str = "impression", threshold: f
     """
     reports_copy = deepcopy(reports)
 
-    preds = []
     for report in tqdm(reports_copy):
         if look_in == "impression":
             text = report.get_impression()
@@ -99,19 +94,20 @@ def fuzzy_match(reports: list[Report], look_in: str = "impression", threshold: f
 
         # This variable is needed to check that no pathology was assigned
         found_path = False
+        fuzzy_scores = []
         for label in labels:
-            # We only accept a match if the whole n-gram of the label is in the impression
+            # We calculate the fuzzy score for all pathologies and get the highest one that is above the threshold
+            # In case of draw, we arbitrarily take the first one
+            score = fuzz.partial_ratio(label, text)
+            fuzzy_scores.append(score)
 
-            if fuzz.partial_ratio(label, text) > threshold:
-                preds.append(label)
-                report.pred_pathology = label
-                found_path = True
-                # TODO: don't break if multiple matches are found but get the max instead
-                break
+        # Only get the highest score that is above the threshold
+        if (max_idx := np.argmax(fuzzy_scores)) > threshold:
+            report.pred_pathology = labels[max_idx]
+            found_path = True
 
         # No pathology was found
         if not found_path:
-            preds.append(Pathology.unknown)
             report.pred_pathology = Pathology.unknown
 
     return reports_copy
@@ -128,44 +124,47 @@ def count_pred_path(reports: list[Report], possible_labels: list[str]) -> dict:
         A dictionary with the number of predicted pathologies for each pathology.
 
     """
-    possible_labels.append(Pathology.unknown)
+    possible_labels_copy = possible_labels.copy()
+    possible_labels_copy.append(Pathology.unknown)
     
     # Initialize counter
-    counter = {x:0 for x in possible_labels}
+    counter = {x:0 for x in possible_labels_copy}
     for report in reports:
         counter[report.pred_pathology] += 1
 
     return counter
 
 
-# Exact match
-preds_exact_impression = exact_match(reports, "impression")
-c_exat_impression = count_pred_path(preds_exact_impression, labels)
-print(f"Number of unlabeled reports with exact matching in the impression: {c_exat_impression[Pathology.unknown]}")
+if __name__ == '__main__':
+    labels = load_pathology_labels("src/data_preparation/data/pathology_labels/pathology_labels.csv")
+    reports, non_impression_reports = load_reports("src/data_preparation/data/merged_crosswalks_csv/sdr_crosswalks.csv",
+                                                   body_section=BodySection.MSK)
+    synonyms_dict = load_radlex_synonyms("src/data_preparation/data/radlex/radlex.xls")
 
-preds_exact_whole_report = exact_match(reports, "report")
-c_exact_whole_report = count_pred_path(preds_exact_whole_report, labels)
-print(f"Number of unlabeled reports with exact matching in the whole report: {c_exact_whole_report[Pathology.unknown]}")
+    # Exact match
+    preds_exact_impression = exact_match(reports, labels, "impression")
+    c_exat_impression = count_pred_path(preds_exact_impression, labels)
+    print(f"Number of unlabeled reports with exact matching in the impression: {c_exat_impression[Pathology.unknown]}")
 
-# Fuzzy match
-preds_fuzzy_impression = fuzzy_match(reports, "impression", threshold=70)
-c_fuzzy_impression = count_pred_path(preds_fuzzy_impression, labels)
-print(f"Number of unlabeled reports with fuzzy matching in the impression: {c_fuzzy_impression[Pathology.unknown]}")
+    preds_exact_whole_report = exact_match(reports, labels, "report")
+    c_exact_whole_report = count_pred_path(preds_exact_whole_report, labels)
+    print(f"Number of unlabeled reports with exact matching in the whole report: {c_exact_whole_report[Pathology.unknown]}")
 
-preds_fuzzy_whole_report = fuzzy_match(reports, "report", threshold=70)
-c_fuzzy_whole_report = count_pred_path(preds_fuzzy_whole_report, labels)
-print(f"Number of unlabeled reports with fuzzy matching in the whole report: {c_fuzzy_whole_report[Pathology.unknown]}")
+    # Fuzzy match
+    preds_fuzzy_impression = fuzzy_match(reports, labels, "impression", threshold=0)
+    c_fuzzy_impression = count_pred_path(preds_fuzzy_impression, labels)
+    print(f"Number of unlabeled reports with fuzzy matching in the impression: {c_fuzzy_impression[Pathology.unknown]}")
 
-
-## Check with synonyms
-preds_exact_impression_synonyms = exact_match(reports, "impression", check_synonyms=True)
-c_exat_impression_synonyms = count_pred_path(preds_exact_impression_synonyms, labels)
-print(f"Number of unlabeled reports with exact matching in the impression with synonyms: {c_exat_impression_synonyms[Pathology.unknown]}")
-
-preds_exact_whole_report_synonyms = exact_match(reports, "report", check_synonyms=True)
-c_exact_whole_report_synonyms = count_pred_path(preds_exact_whole_report_synonyms, labels)
-print(f"Number of unlabeled reports with exact matching in the whole report with synonyms: {c_exact_whole_report_synonyms[Pathology.unknown]}")
+    preds_fuzzy_whole_report = fuzzy_match(reports, labels, "report", threshold=70)
+    c_fuzzy_whole_report = count_pred_path(preds_fuzzy_whole_report, labels)
+    print(f"Number of unlabeled reports with fuzzy matching in the whole report: {c_fuzzy_whole_report[Pathology.unknown]}")
 
 
+    ## Check with synonyms
+    preds_exact_impression_synonyms = exact_match(reports, labels, "impression", check_synonyms=True)
+    c_exat_impression_synonyms = count_pred_path(preds_exact_impression_synonyms, labels)
+    print(f"Number of unlabeled reports with exact matching in the impression with synonyms: {c_exat_impression_synonyms[Pathology.unknown]}")
 
-
+    preds_exact_whole_report_synonyms = exact_match(reports, labels, "report", check_synonyms=True)
+    c_exact_whole_report_synonyms = count_pred_path(preds_exact_whole_report_synonyms, labels)
+    print(f"Number of unlabeled reports with exact matching in the whole report with synonyms: {c_exact_whole_report_synonyms[Pathology.unknown]}")
