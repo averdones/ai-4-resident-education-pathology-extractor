@@ -74,3 +74,50 @@ fuzz.partial_token_set_ratio(report, "lipoma")
 fuzz.partial_token_sort_ratio(report, "lipoma")
 fuzz.QRatio(report, "lipoma")
 fuzz.WRatio(report, "lipoma")
+
+
+
+import spacy
+from spacy.matcher import Matcher
+from negspacy.negation import Negex
+from negspacy.termsets import termset
+
+ts = termset("en_clinical")
+ts.add_patterns({
+            "preceding_negations": ["no obvious"]
+        })
+
+nlp = spacy.load("en_core_sci_lg")
+matcher = Matcher(nlp.vocab)
+
+
+nlp.add_pipe(
+    "negex",
+    config={
+        "neg_termset":ts.get_patterns()
+    }
+)
+
+doc = nlp("signs of acute fracture. No obvious stress fracture")
+for e in doc.ents:
+    print(e.text, e._.negex)
+    print("Done")
+
+
+
+text = "impression: pelvis/left hip: mild bilateral hip joint osteoarthritis. no obvious acute fracture or stress fracture. further evaluation with mri can be obtained if clinically relevant. there is discogenic and facet joint degenerative disease of the lower lumbar spine. there are mild degenerative changes at both sacroiliac joints and symphysis pubis. history: rule out stress fracture technique: xr pelvis ap and frog left 3 views comparison: none electronic signature: i personally reviewed the images and agree with this report. final report: dictated by and signed by attending renata la rocca vieira md 12/18/2019 12:01 pm"
+doc = nlp(text)
+for e in doc.ents:
+    print(e.text, e._.negex)
+    print("Done")
+
+
+pattern = [{"LOWER": "fracture"}, {"IS_PUNCT": True}, {"LOWER": "further"}]
+matcher.add("HelloWorld", [pattern])
+
+doc = nlp(text)
+matches = matcher(doc)
+for match_id, start, end in matches:
+    string_id = nlp.vocab.strings[match_id]  # Get string representation
+    span = doc[start:end]  # The matched span
+    print(match_id, string_id, start, end, span.text)

@@ -1,8 +1,10 @@
-import spacy
 from tqdm import tqdm
 from copy import deepcopy
 from rapidfuzz import fuzz
 import numpy as np
+import spacy
+from negspacy.negation import Negex
+from negspacy.termsets import termset
 
 from src.report_manager import Report
 from src.const.body_sections import BodySection
@@ -28,6 +30,9 @@ def exact_match(reports: list[Report], labels: list[str], look_in: str = "impres
         A list of Report objects with the predicted pathologies.
 
     """
+    # Load Spacy model
+    nlp = get_nlp_model()
+
     reports_copy = deepcopy(reports)
 
     for report in tqdm(reports_copy):
@@ -43,9 +48,13 @@ def exact_match(reports: list[Report], labels: list[str], look_in: str = "impres
         for label in labels:
             # We only accept a match if the whole n-gram of the label is in the impression
             if label in text:
-                report.pred_pathology = label
-                found_path = True
-                break
+                # Check if the label is being negated
+                if is_pathology_negated(label, text, nlp):
+                    break
+                else:
+                    report.pred_pathology = label
+                    found_path = True
+                    break
 
             # TODO: break into different function and have more advance matching
             # Check for synonyms of pathologies
@@ -82,6 +91,9 @@ def fuzzy_match(reports: list[Report], labels: list[str],  look_in: str = "impre
         A list with the predicted pathologies.
 
     """
+    # Load Spacy model
+    nlp = get_nlp_model()
+
     reports_copy = deepcopy(reports)
 
     for report in tqdm(reports_copy):
@@ -105,14 +117,54 @@ def fuzzy_match(reports: list[Report], labels: list[str],  look_in: str = "impre
         max_idx = np.argmax(fuzzy_scores)
         max_score = fuzzy_scores[max_idx]
         if max_score > threshold:
-            report.pred_pathology = labels[max_idx]
-            found_path = True
+            # Check if the label is being negated
+            if not is_pathology_negated(labels[max_idx], text, nlp):
+                report.pred_pathology = labels[max_idx]
+                found_path = True
 
         # No pathology was found
         if not found_path:
             report.pred_pathology = Pathology.unknown
 
     return reports_copy
+
+
+def get_nlp_model() -> spacy.language.Language:
+    """Returns the spacy model."""
+    ts = termset("en_clinical")
+    ts.add_patterns({
+        "preceding_negations": ["no obvious", "normal appearance of the"],
+        "following_negations": ["normal"]
+    })
+    nlp = spacy.load("en_core_sci_lg")
+    nlp.add_pipe(
+        "negex",
+        config={
+            "neg_termset": ts.get_patterns()
+        }
+    )
+
+    return nlp
+
+
+def is_pathology_negated(pathology: str, text: str, nlp: spacy.language.Language) -> bool:
+    """Checks if a pathology is negated in a text corresponding to a report or part of a report.
+
+    Args:
+        pathology: Pathology to check.
+        text: Text to check in.
+
+    Returns:
+        True if the label is negated in the text, False otherwise.
+
+    """
+    doc = nlp(text)
+    for e in doc.ents:
+        if pathology in e.text or e.text in pathology:
+            if e._.negex:
+                return True
+
+    return False
 
 
 def count_pred_path(reports: list[Report], possible_labels: list[str]) -> dict:
@@ -153,7 +205,7 @@ if __name__ == '__main__':
     print(f"Number of unlabeled reports with exact matching in the whole report: {c_exact_whole_report[Pathology.unknown]}")
 
     # Fuzzy match
-    preds_fuzzy_impression = fuzzy_match(reports, labels, "impression", threshold=0)
+    preds_fuzzy_impression = fuzzy_match(reports, labels, "impression", threshold=70)
     c_fuzzy_impression = count_pred_path(preds_fuzzy_impression, labels)
     print(f"Number of unlabeled reports with fuzzy matching in the impression: {c_fuzzy_impression[Pathology.unknown]}")
 
@@ -163,10 +215,10 @@ if __name__ == '__main__':
 
 
     ## Check with synonyms
-    preds_exact_impression_synonyms = exact_match(reports, labels, "impression", check_synonyms=True)
-    c_exat_impression_synonyms = count_pred_path(preds_exact_impression_synonyms, labels)
-    print(f"Number of unlabeled reports with exact matching in the impression with synonyms: {c_exat_impression_synonyms[Pathology.unknown]}")
-
-    preds_exact_whole_report_synonyms = exact_match(reports, labels, "report", check_synonyms=True)
-    c_exact_whole_report_synonyms = count_pred_path(preds_exact_whole_report_synonyms, labels)
-    print(f"Number of unlabeled reports with exact matching in the whole report with synonyms: {c_exact_whole_report_synonyms[Pathology.unknown]}")
+    # preds_exact_impression_synonyms = exact_match(reports, labels, "impression", check_synonyms=True)
+    # c_exat_impression_synonyms = count_pred_path(preds_exact_impression_synonyms, labels)
+    # print(f"Number of unlabeled reports with exact matching in the impression with synonyms: {c_exat_impression_synonyms[Pathology.unknown]}")
+    #
+    # preds_exact_whole_report_synonyms = exact_match(reports, labels, "report", check_synonyms=True)
+    # c_exact_whole_report_synonyms = count_pred_path(preds_exact_whole_report_synonyms, labels)
+    # print(f"Number of unlabeled reports with exact matching in the whole report with synonyms: {c_exact_whole_report_synonyms[Pathology.unknown]}")
