@@ -1,0 +1,9 @@
+negspacy==1.0.3
+numpy==1.22.3
+pandas==1.4.3
+rapidfuzz==2.5.0
+scispacy==0.5.0
+spacy==3.2.4
+streamlit==1.12.0
+tqdm==4.64.0
+xlrd==2.0.1
