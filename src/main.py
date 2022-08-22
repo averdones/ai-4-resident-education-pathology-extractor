@@ -129,14 +129,29 @@ def fuzzy_match(reports: list[Report], labels: list[str],  look_in: str = "impre
     return reports_copy
 
 
-def get_nlp_model() -> spacy.language.Language:
-    """Returns the spacy model."""
+def get_negation_patterns():
+    """Returns the negation patterns."""
     ts = termset("en_clinical")
     ts.add_patterns({
         "preceding_negations": ["no obvious", "normal appearance of the"],
         "following_negations": ["normal"]
     })
-    nlp = spacy.load("en_core_sci_lg")
+
+    return ts
+
+
+def get_nlp_model() -> spacy.language.Language:
+    """Returns the spacy model."""
+    try:
+        nlp = spacy.load("en_core_sci_lg")
+    except:
+        # This is only for streamlit
+        import subprocess
+        url = "https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.0/en_core_sci_lg-0.5.0.tar.gz"
+        subprocess.run(["pip", "install", url])
+        nlp = spacy.load("en_core_sci_lg")
+
+    ts = get_negation_patterns()
     nlp.add_pipe(
         "negex",
         config={
