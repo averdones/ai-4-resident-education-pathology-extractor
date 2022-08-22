@@ -158,6 +158,8 @@ def is_pathology_negated(pathology: str, text: str, nlp: spacy.language.Language
         True if the label is negated in the text, False otherwise.
 
     """
+    # TODO: Save these models once so that they aren't recalculated every time we change the threshold or we call the
+    #  function again
     doc = nlp(text)
     for e in doc.ents:
         if pathology in e.text or e.text in pathology:
@@ -197,8 +199,8 @@ if __name__ == '__main__':
 
     # Exact match
     preds_exact_impression = exact_match(reports, labels, "impression")
-    c_exat_impression = count_pred_path(preds_exact_impression, labels)
-    print(f"Number of unlabeled reports with exact matching in the impression: {c_exat_impression[Pathology.unknown]}")
+    c_exact_impression = count_pred_path(preds_exact_impression, labels)
+    print(f"Number of unlabeled reports with exact matching in the impression: {c_exact_impression[Pathology.unknown]}")
 
     preds_exact_whole_report = exact_match(reports, labels, "report")
     c_exact_whole_report = count_pred_path(preds_exact_whole_report, labels)
