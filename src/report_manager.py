@@ -98,6 +98,7 @@ class Report:
         They can be the same person.
 
         Returns:
+            Tuple with the names of the dictator and the signer.
 
         """
         electronic_signature = self.get_electronic_signature()

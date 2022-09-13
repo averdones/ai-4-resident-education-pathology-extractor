@@ -42,24 +42,18 @@ def load_reports(data_path: str | Path, body_section: str | None = None) -> tupl
         print(f"Getting only reports of section {body_section}")
         df = df[df["file"].str.contains(body_section)]
 
-    # Ignore cases where the report doesn't seem to contain impressions
-    print(f"Total number of reports: {df.shape}")
-    valid_idx = df["Report"].str.contains("impress", case=False)
-    impress_df = df[valid_idx]
-    non_impress_df = df[~valid_idx]
-    print(f"Number of reports after removing reports without 'Impressions': {impress_df.shape}")
-    print(f"Number of reports removed: {non_impress_df.shape[0]}")
-
-    # TODO: potentially return generators if possible
-    # Load reports with impression as Report objects
     impress_reports = []
-    for rep in impress_df["Report"].tolist():
-        impress_reports.append(Report(rep))
-
-    # Load reports without impression as Report objects
     non_impress_reports = []
-    for rep in non_impress_df["Report"].tolist():
-        non_impress_reports.append(Report(rep))
+    for i, text in enumerate(df["Report"].values):
+        rep = Report(text)
+        if rep.has_impression():
+            impress_reports.append(rep)
+        else:
+            non_impress_reports.append(rep)
+
+    print(f"Total number of reports: {len(impress_reports) + len(non_impress_reports)}")
+    print(f"Number of reports with impression: {len(impress_reports)}")
+    print(f"Number of reports without impression: {len(non_impress_reports)}")
 
     return impress_reports, non_impress_reports
 
