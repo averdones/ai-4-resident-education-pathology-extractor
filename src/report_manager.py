@@ -2,12 +2,24 @@ import warnings
 import re
 from functools import lru_cache
 
+from src.const.body_sections import BodySection
+
 
 class Report:
     """Class that handles a radiology report.
 
     Attributes:
         text: The text of the report.
+        orig_filename: The original filename from where the report came. This filename contains the body section.
+        week: The week of the report.
+        day: The day of the report.
+        modality: The image modality of the report.
+        exam_description: The description of the exam.
+        reason: The reason for the exam.
+        orig_acc: The original accession number of the report.
+        anon_acc: An anonymized accession number of the report.
+        anon_acc_1: An anonymized accession number of the report.
+        anon_acc_2: An anonymized accession number of the report.
         gt_pathology: The pathology assigned to this report by a medical expert.
 
     """
@@ -15,9 +27,21 @@ class Report:
     impression_token = "impression:"
     electronic_signature_token = "electronic signature"
 
-    def __init__(self, text: str, gt_pathology: str | None = None) -> None:
+    def __init__(self, text: str, orig_filename: str, week: int, day: int, modality: str, exam_description: str,
+                 reason: str, orig_acc: str, anon_acc: str, anon_acc_1: str, anon_acc_2: str,
+                 gt_pathology: str | None = None) -> None:
         """Initializes a Report object."""
         self.text = text.lower()
+        self.orig_filename = orig_filename.lower()
+        self.week = week
+        self.day = day
+        self.modality = modality.lower() if isinstance(modality, str) else None
+        self.exam_description = exam_description.lower()
+        self.reason = reason.lower()
+        self.orig_acc = orig_acc
+        self.anon_acc = anon_acc
+        self.anon_acc_1 = anon_acc_1
+        self.anon_acc_2 = anon_acc_2
         self.gt_pathology = gt_pathology.lower() if gt_pathology is not None else None
 
         # This will be assigned later by a non-human model
@@ -48,6 +72,16 @@ class Report:
             return True
 
         return False
+
+    @property
+    def body_section(self) -> str:
+        """Gets the body section of the report.
+
+        Returns:
+            The body section.
+
+        """
+        return BodySection.get_section(self.orig_filename)
 
     def get_impression(self) -> str:
         """Returns the impression section of the report."""
@@ -92,7 +126,7 @@ class Report:
         return " ".join(words_list)
 
     @lru_cache()
-    def get_authors(self):
+    def get_authors(self) -> tuple[str, str]:
         """Gets the doctors that dictated and signed the report.
 
         They can be the same person.
@@ -112,7 +146,7 @@ class Report:
 
         return dictator, signer
 
-    def get_dictator(self):
+    def get_dictator(self) -> str:
         """Gets the doctor that dictated the report.
 
         Returns:
@@ -121,7 +155,7 @@ class Report:
         """
         return self.get_authors()[0]
 
-    def get_signer(self):
+    def get_signer(self) -> str:
         """Gets the doctor that signed the report.
 
         Returns:
