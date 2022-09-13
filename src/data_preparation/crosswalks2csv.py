@@ -22,9 +22,8 @@ def crosswalks_to_csv(input_dir: Path, output_filename: Path) -> None:
     for f in files:
         df = pd.read_excel(f)
 
-        # Add column to identify the origin file and the row index in the file
+        # Add column to identify the origin file
         df.insert(0, "file", f.stem)
-        df.insert(1, "row_index", df.index)
 
         # Drop rows with all nans due to excel bad formatting
         df = df.dropna(how="all")
@@ -34,33 +33,14 @@ def crosswalks_to_csv(input_dir: Path, output_filename: Path) -> None:
 
         # Clean column names
         df.columns = [x.strip() for x in df.columns]
-        if "ExamDescription" in df.columns:
-            df = df.rename(columns={"ExamDescription": "Exam Description"})
+        df.columns = df.columns.str.replace("Accession .1", "Accession.1", regex=False)
+        df.columns = df.columns.str.replace("Accession .2", "Accession.2", regex=False)
+        df.columns = df.columns.str.replace("ExamDescription", "Exam Description", regex=False)
 
-        # Drop invalid and unwanted columns
+        # Drop invalid columns
         for name in df.columns:
-            if "unnamed" in name.lower() or "anonymized accession" in name.lower():
+            if "unnamed" in name.lower():
                 df = df.drop(columns=[name])
-        # df = df.dropna(axis=1, how="all")
-
-        ###############
-        # We don't need this code anymore because we simply drop the columns with anonymized accessions
-        # Merge columns with anonymized accessions into one
-        # merged_data_list = []
-        # for name in df.columns:
-        #     if "anonymized accession" in name.lower():
-        #         # Save values in the columns
-        #         merged_data_list.append(np.expand_dims(df[name].astype(str), axis=1))
-        #
-        #         # Remove the column
-        #         df = df.drop(columns=[name])
-
-        # Add the new column
-        # hor_stacked_list = list(np.hstack(merged_data_list))
-        # for i in range(len(hor_stacked_list)):
-        #     hor_stacked_list[i] = ";".join(hor_stacked_list[i])
-        # df["Anonymized Accessions"] = hor_stacked_list
-        ###############
 
         # Append dataframe to list to concatenate
         df_list.append(df)
